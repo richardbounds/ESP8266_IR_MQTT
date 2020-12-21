@@ -52,28 +52,52 @@ void setup() {
   Serial.print("IRrecvDemo is now running and waiting for IR message on Pin ");
   Serial.println(RECV_PIN);
   Heltec.begin(true /*DisplayEnable Enable*/, true /*Serial Enable*/);
-  WIFISetUp();
 
 }
 
 
-
-
 void loop() {
+  if (WIFISetUp()) {
+    recvIr();
+    client.loop();
+  }
+}
+
+void recvIr() {
   if (irrecv.decode(&results)) {
 
-    serialPrintUint64(results.value, HEX);
+    switch (results.decode_type){
+      case NEC: Serial.println("NEC"); break ;
+      case SONY: Serial.println("SONY"); break ;
+      case RC5: Serial.println("RC5"); break ;
+      case RC6: Serial.println("RC6"); break ;
+      case DISH: Serial.println("DISH"); break ;
+      case SHARP: Serial.println("SHARP"); break ;
+      case JVC: Serial.println("JVC"); break ;
+      case SANYO: Serial.println("SANYO"); break ;
+      case MITSUBISHI: Serial.println("MITSUBISHI"); break ;
+      case SAMSUNG: Serial.println("SAMSUNG"); break ;
+      case LG: Serial.println("LG"); break ;
+      case WHYNTER: Serial.println("WHYNTER"); break ;
+      case AIWA_RC_T501: Serial.println("AIWA_RC_T501"); break ;
+      case PANASONIC: Serial.println("PANASONIC"); break ;
+      case DENON: Serial.println("DENON"); break ;
+    default:
+      case UNKNOWN: Serial.println("UNKNOWN"); break ;
+    }
+
+    // serialPrintUint64(results.value, HEX);
+    // Serial.print(":");
+    serialPrintUint64(results.address);
     Serial.print(":");
-    serialPrintUint64(results.address, HEX);
-    Serial.print(":");
-    serialPrintUint64(results.command, HEX);
+    serialPrintUint64(results.command);
     Serial.println("");
     
     char irValue[16];
     itoa(results.value, irValue, 16);
 
     Heltec.display->clear();
-    String dispString = String(irValue) + ":" + String(results.address) + ":" + String(results.command);
+    String dispString = String(results.address) + ":" + String(results.command);
     Heltec.display->drawString(0, 0, "Received:");
     Heltec.display->drawString(0, 9, dispString);
     if (results.address == IR_ADDRESS){
@@ -90,72 +114,66 @@ void loop() {
     irrecv.resume(); // Receive the next value
   }
   delay(100);
-  client.loop();
 }
 
 
 
-void WIFISetUp()
+bool WIFISetUp()
 {
-  // Set WiFi to station mode and disconnect from an AP if it was previously connected
-  WiFi.disconnect(true);
-  delay(100);
-  WiFi.mode(WIFI_STA);
-  Serial.println();
-  Serial.print("MAC: ");
-  Serial.println(WiFi.macAddress());
+  while(WiFi.status() != WL_CONNECTED) {
+    // Set WiFi to station mode and disconnect from an AP if it was previously connected
+    WiFi.disconnect(true);
+    delay(100);
+    WiFi.mode(WIFI_STA);
+    Serial.println();
+    Serial.print("MAC: ");
+    Serial.println(WiFi.macAddress());
 
-  WiFi.setAutoConnect(true);
-  WiFi.begin(ssid,password);//fill in "Your WiFi SSID","Your Password"
-  delay(100);
-  
-  Heltec.display->clear();
-  Heltec.display->drawString(0, 0, "Connecting to WiFi");
-  Heltec.display->display();
-  delay(100);
-  
-  WiFi.waitForConnectResult();
-  Heltec.display->clear();
-  if(WiFi.status() == WL_CONNECTED)
-  {
-    Heltec.display->drawString(0, 0, "Connected, IP address: ");
-    IPAddress ip = WiFi.localIP();
-    String ipString = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
-    Heltec.display->drawString(0, 9, ipString);
-    Heltec.display->display();
-    delay(1000);
+    WiFi.setAutoConnect(true);
+    WiFi.begin(ssid,password);
+    delay(100);
     
     Heltec.display->clear();
-    client.setServer(mqttServer, mqttPort);
-    //client.setCallback(callback);
-   
-    while (!client.connected()) {
-      
-      Heltec.display->drawString(0, 0, "Connecting to MQTT...");
-   
-      if (client.connect(mqttClient, mqttUser, mqttPassword )) {
-   
-        Heltec.display->drawString(0, 9, "Connected.");  
-        Heltec.display->display();
-   
-      } else {
-   
-        Heltec.display->drawString(0, 9, "Failed with state ");
-        Heltec.display->drawString(0, 9, String(client.state()));
-        Heltec.display->display();
-        delay(2000);
-   
-      }
-  }
- 
-  }
-  else
-  {
-    Heltec.display->drawString(0, 0, "Setup failed");
-    Heltec.display->drawString(0, 9, "WiFi Status: " + String(WiFi.status()));
+    Heltec.display->drawString(0, 0, "Connecting to WiFi");
+    Heltec.display->display();
+    delay(100);
+    
+    WiFi.waitForConnectResult();
+    Heltec.display->clear();
+    if(WiFi.status() == WL_CONNECTED)
+    {
+      Heltec.display->drawString(0, 0, "Connected, IP address: ");
+      IPAddress ip = WiFi.localIP();
+      String ipString = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
+      Heltec.display->drawString(0, 9, ipString);
+
+    } else {
+      Heltec.display->drawString(0, 0, "Wifi connection failed with state: ");
+      Heltec.display->drawString(0, 9, String(WiFi.status()));
+    }
     Heltec.display->display();
     delay(1000);
-    Heltec.display->clear();
   }
+  Heltec.display->clear();
+  while ((WiFi.status() == WL_CONNECTED) & !client.connected()) {
+    
+    Heltec.display->drawString(0, 0, "Connecting to MQTT...");
+    client.setServer(mqttServer, mqttPort);
+    if (client.connect(mqttClient, mqttUser, mqttPassword )) {
+  
+      Heltec.display->drawString(0, 9, "MQTT connected.");  
+      Heltec.display->display();
+      delay(1000);
+    } else {
+  
+      Heltec.display->drawString(0, 9, "MQTT failed with state: ");
+      Heltec.display->drawString(0, 9, String(client.state()));
+      Heltec.display->display();
+      delay(2000);
+  
+    }
+  }
+  
+  return (WiFi.status() == WL_CONNECTED) & client.connected();
 }
 
